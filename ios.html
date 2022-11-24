@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            overflow: hidden;
+        }
+
+        html {
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            overflow: hidden;
+        }
+
+        .embed-container iframe,
+        .embed-container object,
+        .embed-container embed {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <div id="player-iframe"></div>
+    </div>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        var player;
+        var initialized = false;
+        var timer;
+        var lastState = 0;
+        var shouldStop = false;
+        var shouldPause = false;
+        var error = false;
+        var url = new URL(window.location.href);
+        var videoId = url.searchParams.get("videoId");
+        var start = parseInt(url.searchParams.get("start"));
+        var end = parseInt(url.searchParams.get("end"));
+
+        function sendMessage(message) {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.message) {
+                window.webkit.messageHandlers.message.postMessage({
+                    message
+                });
+            }
+        }
+
+        YT.ready(function () {
+            player = new YT.Player('player-iframe', {
+                width: '640',
+                height: '390',
+                videoId: videoId,
+                playerVars: {
+                    'playsinline': 1,
+                    'autoplay': 1,
+                    'controls': 0,
+                    'origin': 'https://www.youtube.com',
+                    'iv_load_policy': 3,
+                    'cc_load_policy': 3,
+                    'cc_lang_policy': 3,
+                    'modestbranding': 1,
+                    'start': start,
+                    'end': end,
+                    'loop': 1
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+
+            player.setSize(window.innerWidth, window.innerHeight);
+            
+            initialized = true;
+
+            // Get player play time
+            timer = window.setInterval(getCurrentTime, 500);
+        });
+
+        function onPlayerReady(event) {
+            event.target.playVideo();
+            sendMessage({'event': 'playerReady', 'data': event.data });
+        }
+
+        function onPlayerStateChange(event) {
+            if (player && event.data == YT.PlayerState.PLAYING) {
+                ensureState();
+            }
+            else if (player && event.data == YT.PlayerState.ENDED) {
+                player.seekTo(start, true);
+            }
+           
+            lastState = event.data;
+            sendMessage({ 'event': 'playerStateChanged', 'data': event.data });
+             
+        }
+
+        function getCurrentTime() {
+            if (player && lastState == YT.PlayerState.PLAYING) {
+                ensureState();
+                let time = player.getCurrentTime();
+                sendMessage({ 'event': 'playerPlayTime', 'data': time });
+                // Manual loop
+                if (time > end) {
+                    player.seekTo(start, true);
+                }
+            }
+        }
+        
+        function ensureState() {
+            if (shouldStop) {
+                stopVideo();
+            }
+            if (shouldPause) {
+                pauseVideo();
+            }
+        }
+
+        function playVideo() {
+            shouldStop = false;
+            shouldPause = false;
+            if (initialized) player.playVideo();
+            return 'true';
+        }
+
+        function seekTo(seconds) {
+            if (initialized) player.seekTo(seconds);
+            return 'true';
+        }
+
+        function stopVideo() {
+            shouldStop = true;
+            if (initialized) player.stopVideo();
+            return 'true';
+        }
+
+        function pauseVideo() {
+            shouldPause = true;
+            if (initialized) player.pauseVideo();
+            return 'true';
+        }
+
+        function setRate(rate) {
+            if (initialized) player.setPlaybackRate(rate);
+            return 'true';
+        }
+
+        function loadVideo(id) {
+            if (initialized) player.loadVideoById(id);
+        }
+
+        window.onresize = function () {
+            //alert('width ' + window.innerWidth + 'height: ' + window.innerHeight);
+            if (player) player.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
